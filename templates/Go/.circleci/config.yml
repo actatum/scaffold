@@ -1,0 +1,69 @@
+version: 2.1
+
+orbs:
+  aws-ecr: circleci/aws-ecr@6.8.2
+  aws-eks: circleci/aws-eks@0.2.7
+  kube-orb: circleci/kubernetes@0.11.0
+
+jobs:
+  test:
+    docker:
+      - image: circleci/golang:1.14
+    working_directory: /go/src/github.com/{{ORG_NAME}}/{{REPO_NAME}}
+    steps:
+      - checkout
+      - run:
+          command: go get -v -t -d ./...
+          name: install dependencies
+      - run:
+          command: |
+            mkfifo /tmp/fifo-$$
+            grep -v 'no test files' </tmp/fifo-$$ & go test -v ./... -cover >/tmp/fifo-$$
+            RES=$?
+            rm /tmp/fifo-$$
+            exit $RES
+          name: unit tests
+
+  build-and-push:
+    machine: true
+    steps:
+      - aws-ecr/build-and-push-image:
+          account-url: AWS_ECR_ACCOUNT_URL
+          aws-access-key-id: AWS_ACCESS_KEY_ID
+          aws-secret-access-key: AWS_SECRET_ACCESS_KEY
+          create-repo: true
+          region: AWS_REGION
+          repo: "${SERVICE_NAME}"
+          tag: "latest"
+          extra-build-args: '--build-arg SSH_PRIVATE_KEY="$(cat ~/.ssh/id_rsa)"'
+
+  deploy:
+    executor: aws-eks/python3
+    steps:
+      - checkout
+      - aws-eks/update-kubeconfig-with-authenticator:
+          cluster-name: "dev"
+          aws-region: $AWS_REGION
+          install-kubectl: true
+      - aws-eks/install-eksctl
+      - run:
+          name: "deploy pods"
+          command: kubectl replace -f k8s/deploy.yml -n kube-system
+
+workflows:
+  version: 2
+  test-build-push:
+    jobs:
+      - test
+      - build-and-push:
+          requires:
+            - test
+          filters:
+            branches:
+              only: master
+      - deploy:
+          requires:
+            - build-and-push
+          filters:
+            branches:
+              only: master
