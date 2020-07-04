@@ -30,15 +30,15 @@ var cfgFile string
 var rootCmd = &cobra.Command{
 	Use:   "scaffold",
 	Short: "A cli tool to quickly scaffold out folder structure and files for projects",
-	Long: `A longer description that spans multiple lines and likely contains
-examples and usage of using your application. For example:
-
-scaffold is a CLI library to allow you to quickly scaffold out 
+	Long: `scaffold is a CLI library to allow you to quickly scaffold out
 files and folder structure for REST API's and other projects.
+
+To scaffold a rest api use "scaffold rest -s projectName"
+the -s flag is used to specify the project name and in turn the top level directory that scaffold will create
 
 Languages Supported: 
 Go
-Python`,
+`,
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	//	Run: func(cmd *cobra.Command, args []string) { },

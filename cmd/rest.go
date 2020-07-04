@@ -18,9 +18,11 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"github.com/spf13/viper"
 	"io/ioutil"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -28,6 +30,7 @@ import (
 var (
 	Language string
 	Service string
+	ScaffoldPath string
 	serverFiles = []string{"main.go"}
 	k8sFiles = []string{"service.yml", "deploy.yml"}
 	apiFiles = []string{"http.go", "routes.go"}
@@ -49,14 +52,17 @@ type SubFolder struct {
 // restCmd represents the rest command
 var restCmd = &cobra.Command{
 	Use:   "rest",
+	Aliases: []string{"r"},
 	Short: "This command will scaffold out a rest api",
-	Long: `This command will scaffold out a rest api. Supported Languages: (Go, Python). `,
+	Long: `This command will scaffold out a rest api. Supported Languages: (Go). `,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("rest called")
+		start := time.Now()
 		if err := scaffoldRest(); err != nil {
 			fmt.Fprintf(os.Stderr, "%s\n", err)
 			os.Exit(1)
 		}
+		t := time.Now()
+		fmt.Printf("Scaffolded %s in: %v\n", Service, t.Sub(start))
 	},
 }
 
@@ -78,6 +84,14 @@ func init() {
 func scaffoldRest() error {
 	if Service == "" {
 		return errors.New("--service or -s flag is required")
+	}
+	ScaffoldPath = viper.GetString("root")
+	ok, err := hasTemplates()
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return errors.New("template files not found")
 	}
 	folders := getTopLevelFolders()
 	folders = fillFolders(folders)
@@ -211,7 +225,7 @@ func writeTopTemplate(top TopLevelFolder) error {
 		if err != nil {
 			return err
 		}
-		contents, err := ioutil.ReadFile("templates/Go/" + top.Name + "/" + fileName)
+		contents, err := ioutil.ReadFile(ScaffoldPath+ "/templates/Go/" + top.Name + "/" + fileName)
 		if err != nil {
 			return err
 		}
@@ -237,7 +251,7 @@ func writeSubTemplate(top TopLevelFolder, sub SubFolder) error {
 		if err != nil {
 			return err
 		}
-		contents, err := ioutil.ReadFile("templates/Go/" + top.Name + "/" + sub.Name + "/" + fileName)
+		contents, err := ioutil.ReadFile(ScaffoldPath + "/templates/Go/" + top.Name + "/" + sub.Name + "/" + fileName)
 		if err != nil {
 			return err
 		}
@@ -254,4 +268,12 @@ func writeSubTemplate(top TopLevelFolder, sub SubFolder) error {
 		}
 	}
 	return nil
+}
+
+func hasTemplates() (bool, error) {
+	if _, err := os.Stat(ScaffoldPath + "/templates"); !os.IsNotExist(err) {
+		return true, err
+	}
+
+	return false, nil
 }
