@@ -1,4 +1,4 @@
-module github.com/stackstrio/scaffold
+module github.com/actatum/scaffold
 
 go 1.14
 
