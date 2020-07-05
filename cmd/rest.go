@@ -18,43 +18,43 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"github.com/spf13/viper"
 	"io/ioutil"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/spf13/viper"
+
 	"github.com/spf13/cobra"
 )
 
 var (
-	Language string
-	Service string
-	ScaffoldPath string
-	serverFiles = []string{"main.go"}
-	k8sFiles = []string{"service.yml", "deploy.yml"}
-	apiFiles = []string{"http.go", "routes.go"}
-	serviceFiles = []string{"logic.go", "model.go", "repository.go", "service.go"}
+	Language      string
+	Service       string
+	ScaffoldPath  string
+	serverFiles   = []string{"main.go"}
+	apiFiles      = []string{"http.go", "routes.go"}
+	serviceFiles  = []string{"logic.go", "model.go", "repository.go", "service.go"}
 	circleCIFiles = []string{"config.yml"}
 )
 
 type TopLevelFolder struct {
-	Name string
+	Name       string
 	SubFolders []SubFolder
-	Files []string
+	Files      []string
 }
 
 type SubFolder struct {
-	Name string
+	Name  string
 	Files []string
 }
 
 // restCmd represents the rest command
 var restCmd = &cobra.Command{
-	Use:   "rest",
+	Use:     "rest",
 	Aliases: []string{"r"},
-	Short: "This command will scaffold out a rest api",
-	Long: `This command will scaffold out a rest api. Supported Languages: (Go). `,
+	Short:   "This command will scaffold out a rest api",
+	Long:    `This command will scaffold out a rest api. Supported Languages: (Go). `,
 	Run: func(cmd *cobra.Command, args []string) {
 		start := time.Now()
 		if err := scaffoldRest(); err != nil {
@@ -107,14 +107,9 @@ func scaffoldRest() error {
 
 func getTopLevelFolders() []TopLevelFolder {
 	cmd := TopLevelFolder{
-		Name:      	"cmd",
+		Name:       "cmd",
 		SubFolders: nil,
 		Files:      nil,
-	}
-	k8s := TopLevelFolder{
-		Name:      "k8s",
-		SubFolders: nil,
-		Files:      k8sFiles,
 	}
 	pkg := TopLevelFolder{
 		Name:       "pkg",
@@ -128,7 +123,7 @@ func getTopLevelFolders() []TopLevelFolder {
 	}
 
 	var folders []TopLevelFolder
-	folders = append(folders, cmd, k8s, pkg, circleCI)
+	folders = append(folders, cmd, pkg, circleCI)
 
 	return folders
 }
@@ -167,7 +162,7 @@ func fillFolders(folders []TopLevelFolder) []TopLevelFolder {
 
 func create(structure []TopLevelFolder) error {
 	for _, dir := range structure {
-		if err := os.Mkdir(Service + "/" + dir.Name, 0755); err != nil {
+		if err := os.Mkdir(Service+"/"+dir.Name, 0755); err != nil {
 			return err
 		}
 		if err := writeTop(dir); err != nil {
@@ -208,7 +203,7 @@ func writeTop(folder TopLevelFolder) error {
 }
 
 func writeSub(top TopLevelFolder, sub SubFolder) error {
-	if err := os.MkdirAll(Service + "/" + top.Name + "/" + sub.Name, 0755); err != nil {
+	if err := os.MkdirAll(Service+"/"+top.Name+"/"+sub.Name, 0755); err != nil {
 		return err
 	}
 
@@ -225,7 +220,7 @@ func writeTopTemplate(top TopLevelFolder) error {
 		if err != nil {
 			return err
 		}
-		contents, err := ioutil.ReadFile(ScaffoldPath+ "/templates/Go/" + top.Name + "/" + fileName)
+		contents, err := ioutil.ReadFile(ScaffoldPath + "/templates/Go/" + top.Name + "/" + fileName)
 		if err != nil {
 			return err
 		}
