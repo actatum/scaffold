@@ -247,7 +247,7 @@ func create(root Folder) error {
 	}
 
 	for _, dir := range root.SubFolders {
-		if err := abc(dir); err != nil {
+		if err := create(dir); err != nil {
 			return err
 		}
 	}
