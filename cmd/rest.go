@@ -29,24 +29,22 @@ import (
 )
 
 var (
-	Language      string
-	Service       string
-	ScaffoldPath  string
-	serverFiles   = []string{"main.go"}
-	apiFiles      = []string{"http.go", "routes.go"}
-	serviceFiles  = []string{"logic.go", "model.go", "repository.go", "service.go"}
-	circleCIFiles = []string{"config.yml"}
+	Language         string
+	Service          string
+	ScaffoldPath     string
+	rootFiles        = []string{"protoc-gen.sh", "Dockerfile", ".gitignore"}
+	cmdServerFiles   = []string{"cmd/server/main.go"}
+	pkgApiGRPCFiles  = []string{"pkg/api/grpc/grpc.go"}
+	pkgApiHttpFiles  = []string{"pkg/api/http/http.go", "pkg/api/http/routes.go"}
+	pkgApiProtoFiles = []string{"pkg/api/proto/service.proto"}
+	pkgServiceFiles  = []string{"pkg/service/logic.go", "pkg/service/repository.go"}
+	circleCIFiles    = []string{".circleci/config.yml"}
 )
 
-type TopLevelFolder struct {
+type Folder struct {
 	Name       string
-	SubFolders []SubFolder
+	SubFolders []Folder
 	Files      []string
-}
-
-type SubFolder struct {
-	Name  string
-	Files []string
 }
 
 // restCmd represents the rest command
@@ -93,176 +91,138 @@ func scaffoldRest() error {
 	if !ok {
 		return errors.New("template files not found")
 	}
-	folders := getTopLevelFolders()
-	folders = fillFolders(folders)
-	if err := createProjectFolder(); err != nil {
-		return err
-	}
-	if err := create(folders); err != nil {
+	root := setupFolders()
+	if err := create(root); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func getTopLevelFolders() []TopLevelFolder {
-	cmd := TopLevelFolder{
+func setupFolders() Folder {
+	sub := topLevelFolders()
+	root := Folder{
+		Name:       Service,
+		SubFolders: sub,
+		Files:      rootFiles,
+	}
+
+	return root
+}
+
+func topLevelFolders() []Folder {
+	var folders []Folder
+	pkgSub := pkgFolders()
+	cmdSub := cmdFolders()
+	cmd := Folder{
+		Name:       Service + "/cmd",
+		SubFolders: cmdSub,
+		Files:      nil,
+	}
+	pkg := Folder{
+		Name:       Service + "/pkg",
+		SubFolders: pkgSub,
+		Files:      nil,
+	}
+	ci := Folder{
+		Name:       Service + "/.circleci",
+		SubFolders: nil,
+		Files:      circleCIFiles,
+	}
+
+	folders = append(folders, cmd, pkg, ci)
+	return folders
+}
+
+func cmdFolders() []Folder {
+	var folders []Folder
+	cmdServer := Folder{
+		Name:       Service + "/cmd/server",
+		SubFolders: nil,
+		Files:      cmdServerFiles,
+	}
+
+	folders = append(folders, cmdServer)
+	return folders
+}
+
+func pkgFolders() []Folder {
+	var folders []Folder
+	apiSub := apiFolders()
+	api := Folder{
+		Name:       Service + "/pkg/api",
+		SubFolders: apiSub,
+		Files:      nil,
+	}
+	service := Folder{
+		Name:       Service + "/pkg/service",
+		SubFolders: nil,
+		Files:      pkgServiceFiles,
+	}
+
+	folders = append(folders, api, service)
+	return folders
+}
+
+func apiFolders() []Folder {
+	var folders []Folder
+	grpc := Folder{
+		Name:       Service + "/pkg/api/grpc",
+		SubFolders: nil,
+		Files:      pkgApiGRPCFiles,
+	}
+	http := Folder{
+		Name:       Service + "/pkg/api/http",
+		SubFolders: nil,
+		Files:      pkgApiHttpFiles,
+	}
+	proto := Folder{
+		Name:       Service + "/pkg/api/proto",
+		SubFolders: nil,
+		Files:      pkgApiProtoFiles,
+	}
+
+	folders = append(folders, grpc, http, proto)
+
+	return folders
+}
+
+func getRootFolder() Folder {
+	service := Folder{
+		Name:       Service,
+		SubFolders: nil,
+		Files:      rootFiles,
+	}
+
+	return service
+}
+
+func getTopLevelFolders() []Folder {
+	cmd := Folder{
 		Name:       "cmd",
 		SubFolders: nil,
 		Files:      nil,
 	}
-	pkg := TopLevelFolder{
+	pkg := Folder{
 		Name:       "pkg",
 		SubFolders: nil,
 		Files:      nil,
 	}
-	circleCI := TopLevelFolder{
+	circleCI := Folder{
 		Name:       ".circleci",
 		SubFolders: nil,
 		Files:      circleCIFiles,
 	}
 
-	var folders []TopLevelFolder
+	var folders []Folder
 	folders = append(folders, cmd, pkg, circleCI)
 
 	return folders
 }
 
-func fillFolders(folders []TopLevelFolder) []TopLevelFolder {
-	var filled []TopLevelFolder
-	for _, top := range folders {
-		fmt.Println(top.Name)
-		switch top.Name {
-		case "cmd":
-			server := SubFolder{
-				Name:  "server",
-				Files: serverFiles,
-			}
-			top.SubFolders = append(top.SubFolders, server)
-
-		case "pkg":
-			api := SubFolder{
-				Name:  "api",
-				Files: apiFiles,
-			}
-			service := SubFolder{
-				Name:  "service",
-				Files: serviceFiles,
-			}
-
-			top.SubFolders = append(top.SubFolders, api, service)
-
-		}
-		filled = append(filled, top)
-
-	}
-
-	return filled
-}
-
-func create(structure []TopLevelFolder) error {
-	for _, dir := range structure {
-		if err := os.Mkdir(Service+"/"+dir.Name, 0755); err != nil {
-			return err
-		}
-		if err := writeTop(dir); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func createProjectFolder() error {
-	if err := os.Mkdir(Service, 0755); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func StripComment(code string) string {
+func stripComment(code string) string {
 	code = strings.Trim(code, "// ")
 	return code
-}
-
-func writeTop(folder TopLevelFolder) error {
-	if folder.SubFolders != nil {
-		for _, sub := range folder.SubFolders {
-			if err := writeSub(folder, sub); err != nil {
-				return err
-			}
-		}
-	}
-
-	if err := writeTopTemplate(folder); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func writeSub(top TopLevelFolder, sub SubFolder) error {
-	if err := os.MkdirAll(Service+"/"+top.Name+"/"+sub.Name, 0755); err != nil {
-		return err
-	}
-
-	if err := writeSubTemplate(top, sub); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func writeTopTemplate(top TopLevelFolder) error {
-	for _, fileName := range top.Files {
-		file, err := os.Create(Service + "/" + top.Name + "/" + fileName)
-		if err != nil {
-			return err
-		}
-		contents, err := ioutil.ReadFile(ScaffoldPath + "/templates/Go/" + top.Name + "/" + fileName)
-		if err != nil {
-			return err
-		}
-
-		text := StripComment(string(contents))
-
-		_, err = file.Write([]byte(text))
-		if err != nil {
-			return err
-		}
-
-		if err := file.Close(); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func writeSubTemplate(top TopLevelFolder, sub SubFolder) error {
-	for _, fileName := range sub.Files {
-		file, err := os.Create(Service + "/" + top.Name + "/" + sub.Name + "/" + fileName)
-		if err != nil {
-			return err
-		}
-		contents, err := ioutil.ReadFile(ScaffoldPath + "/templates/Go/" + top.Name + "/" + sub.Name + "/" + fileName)
-		if err != nil {
-			return err
-		}
-
-		text := StripComment(string(contents))
-
-		_, err = file.Write([]byte(text))
-		if err != nil {
-			return err
-		}
-
-		if err := file.Close(); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func hasTemplates() (bool, error) {
@@ -271,4 +231,57 @@ func hasTemplates() (bool, error) {
 	}
 
 	return false, nil
+}
+
+func create(root Folder) error {
+	// Create root directory
+	if err := os.Mkdir(root.Name, 0755); err != nil {
+		return err
+	}
+	// Base Case
+	if root.SubFolders == nil {
+		if err := writeFiles(root); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	for _, dir := range root.SubFolders {
+		if err := abc(dir); err != nil {
+			return err
+		}
+	}
+
+	if err := writeFiles(root); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func writeFiles(f Folder) error {
+	for _, fileName := range f.Files {
+		file, err := os.Create(Service + "/" + fileName)
+		if err != nil {
+			return err
+		}
+
+		contents, err := ioutil.ReadFile(ScaffoldPath + "/templates/Go/" + fileName)
+		if err != nil {
+			return err
+		}
+
+		text := stripComment(string(contents))
+
+		_, err = file.Write([]byte(text))
+		if err != nil {
+			return err
+		}
+
+		if err := file.Close(); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

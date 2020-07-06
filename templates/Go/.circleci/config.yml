@@ -1,29 +1,36 @@
+# Golang CircleCI 2.0 configuration file
+#
+# Check https://circleci.com/docs/2.0/language-go/ for more details
 version: 2.1
-
-orbs:
-  aws-ecr: circleci/aws-ecr@6.8.2
-  aws-eks: circleci/aws-eks@0.2.7
-  kube-orb: circleci/kubernetes@0.11.0
-
 jobs:
   test:
     docker:
+      # specify the version
       - image: circleci/golang:1.14
+
+      # Specify service dependencies here if necessary
+      # CircleCI maintains a library of pre-built images
+      # documented at https://circleci.com/docs/2.0/circleci-images/
+      # - image: circleci/postgres:9.4
+
+    #### TEMPLATE_NOTE: go expects specific checkout path representing url
+    #### expecting it in the form of
+    ####   /go/src/github.com/circleci/go-tool
+    ####   /go/src/bitbucket.org/circleci/go-tool
     working_directory: /go/src/github.com/{{ORG_NAME}}/{{REPO_NAME}}
     steps:
       - checkout
+
+      # specify any bash command here prefixed with `run: `
+      - run: go get -v -t -d ./...
       - run:
-          command: go get -v -t -d ./...
-          name: install dependencies
-      - run:
+          name: package tests
           command: |
             mkfifo /tmp/fifo-$$
-            grep -v 'no test files' </tmp/fifo-$$ & go test -v ./... -cover >/tmp/fifo-$$
+            grep -v 'no test files' </tmp/fifo-$$ & go test ./... >/tmp/fifo-$$
             RES=$?
             rm /tmp/fifo-$$
             exit $RES
-          name: unit tests
-
   build-and-push:
     machine: true
     steps:
@@ -33,26 +40,18 @@ jobs:
           aws-secret-access-key: AWS_SECRET_ACCESS_KEY
           create-repo: true
           region: AWS_REGION
-          repo: "${SERVICE_NAME}"
-          tag: "latest"
+          repo: SERVICE_NAME
+          tag: 'latest'
           extra-build-args: '--build-arg SSH_PRIVATE_KEY="$(cat ~/.ssh/id_rsa)"'
 
-  deploy:
-    executor: aws-eks/python3
-    steps:
-      - checkout
-      - aws-eks/update-kubeconfig-with-authenticator:
-          cluster-name: "dev"
-          aws-region: $AWS_REGION
-          install-kubectl: true
-      - aws-eks/install-eksctl
-      - run:
-          name: "deploy pods"
-          command: kubectl replace -f k8s/deploy.yml -n kube-system
+
+orbs:
+  aws-ecr: circleci/aws-ecr@6.8.2
+  aws-ecs: circleci/aws-ecs@1.1.0
 
 workflows:
   version: 2
-  test-build-push:
+  test-build-and-push:
     jobs:
       - test
       - build-and-push:
@@ -61,9 +60,14 @@ workflows:
           filters:
             branches:
               only: master
-      - deploy:
+      - aws-ecs/deploy-service-update:
           requires:
             - build-and-push
+          family: '{SERVICE_NAME}-service'
+          cluster-name: '{SERVICE_NAME}'
+          container-image-name-updates: 'container={SERVICE_NAME}-container, tag=latest'
+          force-new-deployment: true
+          verify-revision-is-deployed: true
           filters:
             branches:
               only: master

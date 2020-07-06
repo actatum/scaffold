@@ -1,0 +1,21 @@
+syntax = "proto3";
+package SERVICE_NAME;
+
+message ExampleDataModel {
+    // string representing some kind of uuid
+    string id = 1;
+    // string representing username
+    string username = 2;
+}
+
+message ExampleRequest {
+    string id = 1;
+}
+
+message ExampleResponse {
+    string username = 1;
+}
+
+service ExampleService {
+    rpc GetByID(ExampleRequest) returns (ExampleResponse);
+}
